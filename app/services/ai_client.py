@@ -1,4 +1,4 @@
-# app/services/ai_client.py - Optimized Qwen 2.5 AI Client
+# app/services/ai_client.py - Complete Optimized Qwen 2.5 AI Client
 
 import asyncio
 import json
@@ -13,23 +13,29 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 class QwenAIClient:
-    """Optimized AI client specifically designed for Qwen 2.5 models"""
+    """Enhanced AI client with better timeout handling and complete CV analysis"""
     
     def __init__(self):
         self.config = settings.get_ai_config()
         self.provider = self.config["provider"]
         self.cache = TTLCache(maxsize=100, ttl=settings.cache_ttl) if settings.enable_caching else None
-        self.max_retries = 3
         
-        logger.info(f"🤖 AI Client initialized: {self.provider} with {self.config.get('model', 'unknown model')}")
-    
+        # Enhanced timeout and retry settings for Qwen 2.5
+        self.max_retries = 5  # Increased from 3
+        self.base_timeout = 180  # 3 minutes base timeout for Qwen 2.5
+        self.max_timeout = 600   # 10 minutes maximum
+        self.ollama_health_check_timeout = 10  # Quick health check
+        
+        logger.info(f"🤖 Enhanced AI Client initialized: {self.provider} with {self.config.get('model', 'unknown model')}")
+        logger.info(f"⏱️ Timeout settings: base={self.base_timeout}s, max={self.max_timeout}s, retries={self.max_retries}")
+
     async def test_connection(self) -> Dict[str, Any]:
-        """Test AI model connection and performance"""
+        """Enhanced connection test with timeout handling"""
         start_time = time.time()
         
         try:
             if self.provider == "ollama":
-                return await self._test_ollama_connection()
+                return await self._test_ollama_connection_enhanced()
             elif self.provider == "openai":
                 return await self._test_openai_connection()
             else:
@@ -37,57 +43,106 @@ class QwenAIClient:
                 
         except Exception as e:
             response_time = time.time() - start_time
-            logger.error(f"❌ AI connection test failed: {e}")
+            logger.error(f"❌ Enhanced AI connection test failed: {e}")
             return {
                 "success": False,
                 "provider": self.provider,
                 "model": self.config.get("model"),
                 "error": str(e),
-                "response_time": response_time
+                "response_time": response_time,
+                "recommendation": "Check Ollama service and model availability"
             }
-    
-    async def _test_ollama_connection(self) -> Dict[str, Any]:
-        """Test Ollama connection"""
+
+    async def _test_ollama_connection_enhanced(self) -> Dict[str, Any]:
+        """Enhanced Ollama connection test with health checks"""
         start_time = time.time()
         
-        async with httpx.AsyncClient(timeout=30) as client:
-            # Test 1: Check Ollama version
-            version_response = await client.get(f"{self.config['url']}/api/version")
-            version_response.raise_for_status()
-            version_data = version_response.json()
+        try:
+            # Step 1: Quick health check
+            logger.info("🔍 Step 1: Checking Ollama service health...")
+            async with httpx.AsyncClient(timeout=self.ollama_health_check_timeout) as client:
+                health_response = await client.get(f"{self.config['url']}/api/version")
+                health_response.raise_for_status()
+                version_data = health_response.json()
+                logger.info(f"✅ Ollama service healthy: v{version_data.get('version', 'unknown')}")
             
-            # Test 2: Check available models
-            models_response = await client.get(f"{self.config['url']}/api/tags")
-            models_response.raise_for_status()
-            models_data = models_response.json()
+            # Step 2: Check model availability
+            logger.info("🔍 Step 2: Checking model availability...")
+            async with httpx.AsyncClient(timeout=self.ollama_health_check_timeout) as client:
+                models_response = await client.get(f"{self.config['url']}/api/tags")
+                models_response.raise_for_status()
+                models_data = models_response.json()
+                
+                available_models = [model['name'] for model in models_data.get('models', [])]
+                model_available = self.config['model'] in available_models
+                
+                if not model_available:
+                    return {
+                        "success": False,
+                        "provider": "ollama",
+                        "model": self.config['model'],
+                        "error": f"Model {self.config['model']} not found",
+                        "available_models": available_models[:5],
+                        "recommendation": f"Run: ollama pull {self.config['model']}"
+                    }
+                
+                logger.info(f"✅ Model {self.config['model']} is available")
             
-            available_models = [model['name'] for model in models_data.get('models', [])]
-            model_available = self.config['model'] in available_models
-            
-            # Test 3: Quick generation test
+            # Step 3: Test generation with progressive timeout
+            logger.info("🔍 Step 3: Testing generation capabilities...")
             test_start = time.time()
-            test_response = await self._call_ollama(
+            
+            test_response = await self._call_ollama_with_progressive_timeout(
                 'Respond with exactly: "Connection test successful"',
                 temperature=0,
                 max_tokens=50
             )
-            test_time = time.time() - test_start
             
+            test_time = time.time() - test_start
             response_time = time.time() - start_time
             
             return {
                 "success": True,
                 "provider": "ollama",
                 "model": self.config['model'],
-                "model_available": model_available,
-                "available_models": available_models[:5],  # Show first 5
+                "model_available": True,
+                "available_models": available_models[:5],
                 "ollama_version": version_data.get('version'),
-                "test_response": test_response.strip(),
+                "test_response": test_response.strip()[:100],  # Truncate for logging
                 "response_time": response_time,
                 "generation_time": test_time,
-                "tokens_per_second": round(10 / test_time, 2) if test_time > 0 else 0  # Approx
+                "status": "healthy",
+                "recommendation": "AI system ready for processing"
             }
-    
+            
+        except httpx.TimeoutException:
+            return {
+                "success": False,
+                "provider": "ollama", 
+                "model": self.config['model'],
+                "error": "Ollama service timeout - check if Ollama is running",
+                "response_time": time.time() - start_time,
+                "recommendation": "Start Ollama service: ollama serve"
+            }
+        except httpx.ConnectError:
+            return {
+                "success": False,
+                "provider": "ollama",
+                "model": self.config['model'], 
+                "error": "Cannot connect to Ollama service",
+                "response_time": time.time() - start_time,
+                "recommendation": "Check Ollama URL and ensure service is running"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "provider": "ollama",
+                "model": self.config['model'],
+                "error": str(e),
+                "response_time": time.time() - start_time,
+                "recommendation": "Check Ollama logs for detailed error information"
+            }
+
     async def _test_openai_connection(self) -> Dict[str, Any]:
         """Test OpenAI-compatible API connection"""
         start_time = time.time()
@@ -125,88 +180,31 @@ class QwenAIClient:
                 "token_usage": usage,
                 "tokens_per_second": round(usage.get('total_tokens', 0) / response_time, 2) if response_time > 0 else 0
             }
-    
-    async def analyze_cv_text(
-        self, 
-        cv_text: str, 
-        progress_callback: Optional[Callable] = None
-    ) -> Dict[str, Any]:
-        """Analyze CV text using Qwen 2.5 - Optimized for better accuracy"""
-        
-        # Check cache first
-        cache_key = f"cv_analysis_{hash(cv_text)}"
-        if self.cache and cache_key in self.cache:
-            logger.info("📋 Using cached CV analysis")
-            return self.cache[cache_key]
-        
-        try:
-            if progress_callback:
-                progress_callback("ai_analysis", 10, "Preprocessing CV text...")
-            
-            # Preprocess CV text for better Qwen 2.5 understanding
-            processed_text = self._preprocess_cv_text(cv_text)
-            
-            if progress_callback:
-                progress_callback("ai_analysis", 30, "Generating AI prompt...")
-            
-            # Create optimized prompt for Qwen 2.5
-            prompt = self._create_qwen_cv_prompt(processed_text)
-            
-            if progress_callback:
-                progress_callback("ai_analysis", 50, "Calling Qwen 2.5 model...")
-            
-            # Call AI model
-            start_time = time.time()
-            if self.provider == "ollama":
-                response = await self._call_ollama(prompt, temperature=0.1)
-            else:
-                response = await self._call_openai(prompt, temperature=0.1)
-            
-            ai_time = time.time() - start_time
-            
-            if progress_callback:
-                progress_callback("ai_analysis", 80, "Parsing AI response...")
-            
-            # Parse and validate response
-            parsed_data = self._parse_qwen_response(response)
-            validated_data = self._validate_and_enhance_data(parsed_data, cv_text)
-            
-            # Add metadata
-            validated_data["_metadata"] = {
-                "model": self.config.get("model"),
-                "provider": self.provider,
-                "processing_time": ai_time,
-                "text_length": len(cv_text),
-                "confidence_score": self._calculate_confidence_score(validated_data)
-            }
-            
-            # Cache result
-            if self.cache:
-                self.cache[cache_key] = validated_data
-            
-            if progress_callback:
-                progress_callback("ai_analysis", 100, "CV analysis completed")
-            
-            logger.info(f"✅ CV analysis completed in {ai_time:.2f}s for: {validated_data.get('name', 'Unknown')}")
-            
-            return validated_data
-            
-        except Exception as e:
-            logger.error(f"❌ CV analysis failed: {e}")
-            if progress_callback:
-                progress_callback("ai_analysis", 0, f"Error: {str(e)}")
-            raise Exception(f"CV analysis failed: {str(e)}")
-    
-    async def _call_ollama(
+
+    async def _call_ollama_with_progressive_timeout(
         self, 
         prompt: str, 
         temperature: float = 0.1,
         max_tokens: int = 4000
     ) -> str:
-        """Optimized Ollama API call with retry logic"""
+        """Enhanced Ollama call with progressive timeout and better retry logic"""
+        
+        last_exception = None
         
         for attempt in range(1, self.max_retries + 1):
             try:
+                # Progressive timeout: start with base, increase each attempt
+                current_timeout = min(
+                    self.base_timeout * (1.5 ** (attempt - 1)),
+                    self.max_timeout
+                )
+                
+                logger.info(f"🤖 Ollama attempt {attempt}/{self.max_retries} (timeout: {current_timeout:.0f}s)")
+                
+                # Check Ollama health before making the call
+                if attempt > 1:  # Skip health check on first attempt
+                    await self._quick_ollama_health_check()
+                
                 payload = {
                     "model": self.config["model"],
                     "prompt": prompt,
@@ -217,11 +215,19 @@ class QwenAIClient:
                         "top_k": 40,
                         "num_predict": max_tokens,
                         "repeat_penalty": 1.1,
-                        "stop": ["</analysis>", "END_RESPONSE"]
+                        "stop": ["</analysis>", "END_RESPONSE"],
+                        # Optimization for Qwen 2.5
+                        "num_ctx": 4096,  # Context window
+                        "num_batch": 512,  # Batch size
+                        "num_gpu": 1 if settings.environment == "production" else 0,
+                        "low_vram": True,  # Memory optimization
+                        "f16_kv": True,    # Memory optimization
                     }
                 }
                 
-                async with httpx.AsyncClient(timeout=self.config["timeout"]) as client:
+                start_time = time.time()
+                
+                async with httpx.AsyncClient(timeout=current_timeout) as client:
                     response = await client.post(
                         f"{self.config['url']}/api/generate",
                         json=payload
@@ -232,19 +238,58 @@ class QwenAIClient:
                     if not result.get('response'):
                         raise Exception("Empty response from Ollama")
                     
-                    return result['response']
+                    generation_time = time.time() - start_time
+                    response_text = result['response']
                     
-            except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
+                    logger.info(f"✅ Ollama success: {len(response_text)} chars in {generation_time:.1f}s")
+                    return response_text
+                    
+            except httpx.TimeoutException as e:
+                last_exception = e
+                wait_time = min(10 * attempt, 60)  # Progressive backoff, max 60s
+                logger.warning(f"⏰ Ollama timeout (attempt {attempt}), retrying in {wait_time}s...")
+                
                 if attempt < self.max_retries:
-                    wait_time = 2 ** attempt
-                    logger.warning(f"⏰ Ollama call failed (attempt {attempt}), retrying in {wait_time}s...")
                     await asyncio.sleep(wait_time)
                     continue
+                    
+            except httpx.HTTPStatusError as e:
+                last_exception = e
+                if e.response.status_code == 503:  # Service unavailable
+                    wait_time = min(5 * attempt, 30)
+                    logger.warning(f"⚠️ Ollama service busy (attempt {attempt}), retrying in {wait_time}s...")
+                    
+                    if attempt < self.max_retries:
+                        await asyncio.sleep(wait_time)
+                        continue
                 else:
-                    raise Exception(f"Ollama call failed after {self.max_retries} attempts: {str(e)}")
+                    # Other HTTP errors shouldn't be retried
+                    raise Exception(f"Ollama HTTP error {e.response.status_code}: {e.response.text}")
+                    
             except Exception as e:
-                raise Exception(f"Ollama call error: {str(e)}")
-    
+                last_exception = e
+                if "connection" in str(e).lower():
+                    wait_time = min(5 * attempt, 30)
+                    logger.warning(f"🔌 Ollama connection issue (attempt {attempt}), retrying in {wait_time}s...")
+                    
+                    if attempt < self.max_retries:
+                        await asyncio.sleep(wait_time)
+                        continue
+                else:
+                    # Non-connection errors shouldn't be retried as much
+                    if attempt >= 2:
+                        raise Exception(f"Ollama error: {str(e)}")
+        
+        # All retries exhausted
+        error_msg = f"Ollama failed after {self.max_retries} attempts"
+        if last_exception:
+            if isinstance(last_exception, httpx.TimeoutException):
+                error_msg += f" (final error: timeout after {self.max_timeout}s)"
+            else:
+                error_msg += f" (final error: {str(last_exception)})"
+        
+        raise Exception(error_msg)
+
     async def _call_openai(
         self, 
         prompt: str, 
@@ -293,7 +338,110 @@ class QwenAIClient:
                     raise Exception(f"API call failed after {self.max_retries} attempts: {str(e)}")
             except Exception as e:
                 raise Exception(f"API call error: {str(e)}")
-    
+
+    async def _quick_ollama_health_check(self):
+        """Quick health check before making Ollama calls"""
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                response = await client.get(f"{self.config['url']}/api/version")
+                response.raise_for_status()
+                logger.debug("✅ Ollama health check passed")
+        except Exception as e:
+            logger.warning(f"⚠️ Ollama health check failed: {e}")
+            raise Exception(f"Ollama service not healthy: {e}")
+
+    async def analyze_cv_text(
+        self, 
+        cv_text: str, 
+        progress_callback: Optional[Callable] = None
+    ) -> Dict[str, Any]:
+        """Enhanced CV analysis with better timeout handling"""
+        
+        # Check cache first
+        cache_key = f"cv_analysis_{hash(cv_text)}"
+        if self.cache and cache_key in self.cache:
+            logger.info("📋 Using cached CV analysis")
+            return self.cache[cache_key]
+        
+        try:
+            if progress_callback:
+                progress_callback("ai_analysis", 10, "Preprocessing CV text...")
+            
+            # Preprocess CV text
+            processed_text = self._preprocess_cv_text(cv_text)
+            
+            if progress_callback:
+                progress_callback("ai_analysis", 30, "Generating optimized AI prompt...")
+            
+            # Create optimized prompt
+            prompt = self._create_qwen_cv_prompt(processed_text)
+            
+            if progress_callback:
+                progress_callback("ai_analysis", 50, f"Calling {self.config['model']} (this may take 2-5 minutes)...")
+            
+            # Call AI model with enhanced error handling
+            start_time = time.time()
+            logger.info(f"🤖 Starting AI analysis with {self.config['model']}...")
+            logger.info(f"📝 Prompt length: {len(prompt)} chars | Text length: {len(cv_text)} chars")
+            
+            if self.provider == "ollama":
+                response = await self._call_ollama_with_progressive_timeout(prompt, temperature=0.1)
+            else:
+                response = await self._call_openai(prompt, temperature=0.1)
+            
+            ai_time = time.time() - start_time
+            
+            if progress_callback:
+                progress_callback("ai_analysis", 80, "Parsing and validating AI response...")
+            
+            # Parse and validate response
+            parsed_data = self._parse_qwen_response(response)
+            validated_data = self._validate_and_enhance_data(parsed_data, cv_text)
+            
+            # Add metadata
+            validated_data["_metadata"] = {
+                "model": self.config.get("model"),
+                "provider": self.provider,
+                "processing_time": ai_time,
+                "text_length": len(cv_text),
+                "confidence_score": self._calculate_confidence_score(validated_data),
+                "timeout_used": self.base_timeout,
+                "response_length": len(response)
+            }
+            
+            # Cache result
+            if self.cache:
+                self.cache[cache_key] = validated_data
+            
+            if progress_callback:
+                progress_callback("ai_analysis", 100, "CV analysis completed successfully")
+            
+            logger.info(f"✅ AI analysis completed in {ai_time:.1f}s for: {validated_data.get('name', 'Unknown')}")
+            logger.info(f"📊 Experience: {validated_data.get('experience_years', {}).get('total', 0)}y | "
+                       f"Skills: {len(validated_data.get('skills', {}).get('technical', []))} | "
+                       f"Confidence: {validated_data['_metadata']['confidence_score']}")
+            
+            return validated_data
+            
+        except Exception as e:
+            ai_time = time.time() - start_time if 'start_time' in locals() else 0
+            logger.error(f"❌ AI analysis failed after {ai_time:.1f}s: {e}")
+            
+            if progress_callback:
+                progress_callback("ai_analysis", 0, f"AI analysis failed: {str(e)[:100]}")
+            
+            # Provide more specific error messages
+            if "timeout" in str(e).lower():
+                detailed_error = f"AI analysis timed out after {ai_time:.1f}s. The model may be overloaded or the prompt too complex."
+            elif "connection" in str(e).lower():
+                detailed_error = f"Connection to AI service failed. Check if Ollama is running and accessible."
+            elif "model" in str(e).lower():
+                detailed_error = f"AI model error. Check if {self.config['model']} is properly loaded in Ollama."
+            else:
+                detailed_error = f"AI analysis error: {str(e)}"
+            
+            raise Exception(detailed_error)
+
     def _preprocess_cv_text(self, cv_text: str) -> str:
         """Preprocess CV text for better Qwen 2.5 understanding"""
         
@@ -313,7 +461,7 @@ class QwenAIClient:
             text = "[RECENT_DATES] " + text
             
         return text
-    
+
     def _create_qwen_cv_prompt(self, cv_text: str) -> str:
         """Create optimized prompt specifically for Qwen 2.5 models"""
         
@@ -381,7 +529,7 @@ VALIDATION RULES:
 
 <analysis>
 """
-    
+
     def _parse_qwen_response(self, response: str) -> Dict[str, Any]:
         """Parse Qwen 2.5 response with enhanced error handling"""
         
@@ -422,7 +570,7 @@ VALIDATION RULES:
         except Exception as e:
             logger.error(f"Response parsing error: {e}")
             return self._create_fallback_response()
-    
+
     def _validate_and_enhance_data(self, data: Dict[str, Any], original_text: str) -> Dict[str, Any]:
         """Validate and enhance extracted data"""
         
@@ -468,7 +616,7 @@ VALIDATION RULES:
                 skills[section] = []
         
         return data
-    
+
     def _calculate_confidence_score(self, data: Dict[str, Any]) -> float:
         """Calculate confidence score for the extracted data"""
         
@@ -498,7 +646,7 @@ VALIDATION RULES:
             score += 0.2
         
         return round(min(1.0, score), 2)
-    
+
     def _create_fallback_response(self) -> Dict[str, Any]:
         """Create fallback response when parsing fails"""
         return {
@@ -526,7 +674,7 @@ VALIDATION RULES:
                 "domain": []
             }
         }
-    
+
     def _get_default_value(self, field: str) -> Any:
         """Get default value for missing fields"""
         defaults = {

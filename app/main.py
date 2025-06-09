@@ -7,6 +7,8 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import List , Optional
 
+import psutil
+
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -645,8 +647,7 @@ async def get_system_stats():
             for c in sorted(consultants, key=lambda x: x['created_at'], reverse=True)[:5]
         ]
         
-        # System metrics
-        import psutil
+        
         system_metrics = {
             "cpu_percent": psutil.cpu_percent(),
             "memory_percent": psutil.virtual_memory().percent,

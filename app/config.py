@@ -2,7 +2,7 @@
 
 import os
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field, validator
 
@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     supabase_service_key: str = Field(..., description="Supabase service role key")
     supabase_anon_key: Optional[str] = Field(default=None, description="Supabase anon key")
     supabase_bucket_name: str = Field(default="consultant-cvs", description="Storage bucket name")
+    ai_model: str = "qwen2.5:7b"
+
     
     # ==========================================
     # AI MODEL CONFIGURATION (QWEN 2.5)
@@ -41,6 +43,18 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
     openai_base_url: Optional[str] = Field(default=None, description="OpenAI base URL")
     openai_model: Optional[str] = Field(default="qwen2.5-7b", description="Model name for OpenAI API")
+    
+    
+        # Enhanced AI timeout settings for Qwen 2.5
+    ai_base_timeout: int = Field(default=180, description="Base timeout for AI calls (seconds)")
+    ai_max_timeout: int = Field(default=600, description="Maximum timeout for AI calls (seconds)")
+    ai_max_retries: int = Field(default=5, description="Maximum retries for AI calls")
+    ai_health_check_timeout: int = Field(default=10, description="Timeout for AI health checks")
+    
+    # Worker timeout settings
+    worker_ai_timeout: int = Field(default=900, description="Worker timeout for AI processing (15 minutes)")
+    worker_phase_2_max_attempts: int = Field(default=3, description="Max attempts for Phase 2 before giving up")
+    
     
     # ==========================================
     # FILE PROCESSING CONFIGURATION
@@ -132,25 +146,30 @@ class Settings(BaseSettings):
         """Clean up CORS origins"""
         return [origin.rstrip('/') for origin in v if origin]
     
-    def get_ai_config(self) -> dict:
-        """Get AI configuration based on provider"""
+    def get_ai_config(self) -> Dict[str, Any]:
+        """Get enhanced AI configuration with timeout settings"""
+        config = {
+            "provider": self.ai_provider,
+            "model": self.ai_model,
+            "base_timeout": self.ai_base_timeout,
+            "max_timeout": self.ai_max_timeout,
+            "max_retries": self.ai_max_retries,
+            "health_check_timeout": self.ai_health_check_timeout
+        }
+        
         if self.ai_provider == "ollama":
-            return {
-                "provider": "ollama",
+            config.update({
                 "url": self.ollama_url,
-                "model": self.ollama_model,
-                "timeout": self.ollama_timeout
-            }
+                "timeout": self.ai_max_timeout  # Use max timeout for Ollama
+            })
         elif self.ai_provider == "openai":
-            return {
-                "provider": "openai",
+            config.update({
                 "api_key": self.openai_api_key,
                 "base_url": self.openai_base_url,
-                "model": self.openai_model,
-                "timeout": self.request_timeout
-            }
-        else:
-            raise ValueError(f"Unsupported AI provider: {self.ai_provider}")
+                "timeout": self.ai_base_timeout  # OpenAI is typically faster
+            })
+        
+        return config
     
     def validate_settings(self) -> bool:
         """Validate critical settings"""

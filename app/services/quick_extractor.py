@@ -114,87 +114,207 @@ class QuickExtractorService:
         text = text.replace('\r\n', '\n').replace('\r', '\n')
         return text.strip()
     
+    # REPLACE the _extract_name method in app/services/quick_extractor.py
+
     def _extract_name(self, lines: List[str]) -> str:
-        """Enhanced name extraction from first few lines with better patterns"""
+        """Enhanced name extraction with multiple strategies"""
         try:
-            # Common name prefixes to skip
-            skip_patterns = [
-                'resume', 'cv', 'curriculum vitae', 'curriculum', 'bio', 'biography',
-                'profile', 'contact', 'page', 'tel:', 'email:', 'phone:', 'mobile:',
-                'address:', 'location:', 'linkedin:', 'github:', 'website:', 'portfolio:',
-                'objective', 'summary', 'experience', 'education', 'skills',
-                'personal information', 'personal details', 'contact information'
-            ]
+            logger.info(f"🔍 Enhanced name search in {len(lines)} lines")
             
-            logger.info(f"🔍 Searching for name in {len(lines)} lines")
-            
-            # Check first 10 lines for names
-            for i, line in enumerate(lines[:10]):
+            # Strategy 1: Look in first 8 lines for clean names
+            for i, line in enumerate(lines[:8]):
                 line = line.strip()
                 
-                # Skip empty or very short lines
-                if not line or len(line) < 2:
+                # Skip empty, very short, or problematic lines
+                if not line or len(line) < 3:
                     continue
                     
-                # Skip lines with skip patterns
+                # Skip lines with common non-name patterns
+                skip_patterns = [
+                    '@', 'email', 'phone', 'tel:', 'mobile:', '+', 'linkedin',
+                    'resume', 'cv', 'curriculum', 'page', 'contact', 'address',
+                    'objective', 'summary', 'profile', 'experience', 'education',
+                    'skills', 'www.', 'http', '.com', '.pdf', 'github'
+                ]
+                
                 if any(pattern in line.lower() for pattern in skip_patterns):
-                    logger.info(f"📋 Skipping line {i}: '{line[:50]}...' (contains skip pattern)")
+                    logger.info(f"📋 Line {i}: '{line[:30]}...' - Skipped (contains skip pattern)")
                     continue
                 
-                # Skip lines with email addresses (likely contact info)
-                if '@' in line:
-                    logger.info(f"📋 Skipping line {i}: '{line[:50]}...' (contains email)")
-                    continue
-                    
-                # Skip lines with too many numbers (likely phone/date)
-                number_count = sum(1 for char in line if char.isdigit())
-                if number_count > len(line) * 0.3:  # More than 30% numbers
-                    logger.info(f"📋 Skipping line {i}: '{line[:50]}...' (too many numbers)")
+                # Skip lines with too many numbers or special chars
+                non_alpha_count = sum(1 for c in line if not c.isalpha() and c != ' ' and c != '-' and c != "'")
+                if non_alpha_count > len(line) * 0.3:
+                    logger.info(f"📋 Line {i}: '{line[:30]}...' - Skipped (too many special chars)")
                     continue
                 
-                # Clean the line
-                cleaned_line = self._clean_name_line(line)
-                if not cleaned_line:
-                    continue
-                    
-                # Check if this looks like a name
-                if self._is_likely_name(cleaned_line):
-                    extracted_name = self._format_name(cleaned_line)
-                    logger.info(f"✅ Found name on line {i}: '{extracted_name}' from '{line}'")
-                    return extracted_name
-                else:
-                    logger.info(f"📋 Rejected line {i}: '{cleaned_line}' (doesn't match name pattern)")
+                # Clean the line for name extraction
+                cleaned = self._clean_name_candidate(line)
+                if cleaned and self._looks_like_name(cleaned):
+                    logger.info(f"✅ Found name via Strategy 1 on line {i}: '{cleaned}' from '{line}'")
+                    return self._format_name(cleaned)
             
-            # Fallback: Look for patterns like "Name: John Doe" in first 15 lines
+            # Strategy 2: Pattern-based search in first 15 lines
             for i, line in enumerate(lines[:15]):
-                name_match = re.search(r'(?:name|candidate|applicant)[\s:]*([A-Za-z\s\-\'\.]{2,50})', line, re.IGNORECASE)
-                if name_match:
-                    potential_name = name_match.group(1).strip()
-                    if self._is_likely_name(potential_name):
-                        extracted_name = self._format_name(potential_name)
-                        logger.info(f"✅ Found name via pattern on line {i}: '{extracted_name}'")
-                        return extracted_name
+                # Look for "Name:" or similar patterns
+                name_patterns = [
+                    r'(?:name|candidate|applicant|person)[\s:]+([A-Za-z][A-Za-z\s\-\'\.]{1,40})',
+                    r'^([A-Z][a-z]+ [A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$',  # Capitalized words
+                    r'([A-Z][a-z]+\s+[A-Z][a-z]+)',  # Simple First Last pattern
+                ]
+                
+                for pattern in name_patterns:
+                    match = re.search(pattern, line, re.IGNORECASE)
+                    if match:
+                        candidate = match.group(1).strip()
+                        cleaned = self._clean_name_candidate(candidate)
+                        if cleaned and self._looks_like_name(cleaned):
+                            logger.info(f"✅ Found name via Strategy 2 on line {i}: '{cleaned}' from pattern")
+                            return self._format_name(cleaned)
             
-            # Last resort: Look for capitalized words that could be names
-            for i, line in enumerate(lines[:8]):
+            # Strategy 3: First capitalized words that could be names
+            for i, line in enumerate(lines[:10]):
                 words = line.split()
-                if len(words) >= 2 and len(words) <= 4:
-                    # Check if first 2-3 words are capitalized and look like names
-                    potential_names = words[:3]
-                    if all(word[0].isupper() and word.isalpha() and len(word) >= 2 for word in potential_names[:2]):
-                        name_candidate = ' '.join(potential_names[:2])
-                        if len(name_candidate) >= 4 and not any(pattern in name_candidate.lower() for pattern in skip_patterns):
-                            extracted_name = self._format_name(name_candidate)
-                            logger.info(f"✅ Found name via capitalization on line {i}: '{extracted_name}'")
-                            return extracted_name
+                if len(words) >= 2:
+                    # Check if first 2-3 words look like a name
+                    potential_name = ' '.join(words[:3])
+                    cleaned = self._clean_name_candidate(potential_name)
+                    if cleaned and self._looks_like_name_lenient(cleaned):
+                        logger.info(f"✅ Found name via Strategy 3 on line {i}: '{cleaned}'")
+                        return self._format_name(cleaned)
             
-            logger.warning("⚠️ Could not find name in CV text")
+            # Strategy 4: Email-based name extraction as fallback
+            email_line = None
+            for line in lines[:20]:
+                if '@' in line and self.email_pattern.search(line):
+                    email_line = line
+                    break
+            
+            if email_line:
+                # Try to extract name from email context
+                email_match = self.email_pattern.search(email_line)
+                if email_match:
+                    email = email_match.group()
+                    # Look for text before email that might be a name
+                    text_before = email_line[:email_line.find(email)].strip()
+                    if text_before:
+                        cleaned = self._clean_name_candidate(text_before)
+                        if cleaned and self._looks_like_name_lenient(cleaned):
+                            logger.info(f"✅ Found name via Strategy 4 (email context): '{cleaned}'")
+                            return self._format_name(cleaned)
+                    
+                    # Extract from email local part as last resort
+                    local_part = email.split('@')[0]
+                    if '.' in local_part:
+                        parts = local_part.split('.')
+                        if len(parts) >= 2:
+                            potential_name = f"{parts[0].title()} {parts[1].title()}"
+                            logger.info(f"✅ Found name via Strategy 4 (email): '{potential_name}'")
+                            return potential_name
+            
+            logger.warning("⚠️ Could not extract name using any strategy")
             return "Unknown"
             
         except Exception as e:
             logger.error(f"❌ Name extraction failed: {e}")
             return "Unknown"
 
+    def _clean_name_candidate(self, text: str) -> str:
+        """Clean a potential name candidate"""
+        if not text:
+            return ""
+        
+        # Remove common prefixes/suffixes
+        text = re.sub(r'^(mr\.?|mrs\.?|ms\.?|dr\.?|prof\.?)\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\s*(jr\.?|sr\.?|ii|iii|iv)$', '', text, flags=re.IGNORECASE)
+        
+        # Keep only letters, spaces, hyphens, apostrophes
+        text = re.sub(r'[^\w\s\-\']', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Remove trailing periods
+        text = text.rstrip('.')
+        
+        return text
+
+    def _looks_like_name(self, text: str) -> bool:
+        """Strict name validation"""
+        if not text or len(text) < 2:
+            return False
+        
+        words = text.split()
+        
+        # Must be 1-4 words
+        if len(words) < 1 or len(words) > 4:
+            return False
+        
+        # Each word should be 2+ characters
+        if any(len(word) < 2 for word in words):
+            return False
+        
+        # Should be mostly alphabetic
+        if not re.match(r'^[A-Za-z\s\-\'\.]+$', text):
+            return False
+        
+        # First word should start with capital
+        if not words[0][0].isupper():
+            return False
+        
+        # If multiple words, second should also be capitalized
+        if len(words) >= 2 and not words[1][0].isupper():
+            return False
+        
+        # Check against common false positives
+        false_positives = [
+            'unknown', 'name', 'full name', 'contact', 'email', 'phone',
+            'resume', 'curriculum', 'objective', 'summary', 'experience',
+            'education', 'skills', 'work', 'personal', 'about me'
+        ]
+        
+        if text.lower() in false_positives:
+            return False
+        
+        return True
+
+    def _looks_like_name_lenient(self, text: str) -> bool:
+        """More lenient name validation for fallback strategies"""
+        if not text or len(text) < 3:
+            return False
+        
+        words = text.split()
+        
+        # Must be 2-3 words for lenient check
+        if len(words) < 2 or len(words) > 3:
+            return False
+        
+        # Each word should be 2+ characters and mostly alphabetic
+        for word in words:
+            if len(word) < 2 or not word.isalpha():
+                return False
+        
+        # At least first two words should be capitalized
+        if not (words[0][0].isupper() and words[1][0].isupper()):
+            return False
+        
+        # Not too long
+        if len(text) > 40:
+            return False
+        
+        return True
+
+    def _format_name(self, name: str) -> str:
+        """Format name properly"""
+        if not name:
+            return "Unknown"
+    
+    # Clean and title case
+        name = re.sub(r'\s+', ' ', name.strip()).title()
+        
+        # Fix common patterns
+        name = re.sub(r'\bMc([a-z])', r'Mc\1', name)  # McDonald
+        name = re.sub(r'\bO\'([a-z])', r"O'\1", name)  # O'Connor
+        
+        return name
+    
     def _clean_name_line(self, line: str) -> str:
         """Clean a line to extract potential name"""
         # Remove common prefixes/suffixes

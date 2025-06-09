@@ -478,6 +478,215 @@ class PhasedCVProcessingWorker:
             "processing_mode": "phased"
         }
 
+    async def _process_phase_2_async(self, consultant: Dict):
+        """Enhanced Phase 2 processing with better timeout handling"""
+        
+        consultant_id = consultant['id']
+        start_time = time.time()
+        
+        # Add to active jobs
+        self.active_jobs[consultant_id] = 'phase_2'
+        
+        # Track Phase 2 specific retry count
+        phase_2_attempts = self.retry_count.get(f"{consultant_id}_phase2", 0)
+        
+        try:
+            logger.info(f"\n🤖 Phase 2 starting: {consultant['name']}")
+            logger.info(f"📋 ID: {consultant_id[:8]}... | Attempt: {phase_2_attempts + 1}/{settings.worker_phase_2_max_attempts}")
+            logger.info(f"📄 Text length: {len(consultant.get('extracted_text', ''))} chars")
+            
+            # Update status to analyzing
+            await database.update_consultant(consultant_id, {
+                "processing_status": "processing",
+                "processing_phase": "analyzing",
+                "processing_metadata": {
+                    "phase_2_attempt": phase_2_attempts + 1,
+                    "ai_model": settings.get_ai_config()["model"],
+                    "ai_provider": settings.ai_provider
+                }
+            })
+            
+            # Enhanced progress callback with timeout awareness
+            def progress_callback(step: str, progress: int, message: str):
+                elapsed = time.time() - start_time
+                logger.info(f"📊 {consultant['name'][:15]}... [{elapsed:.0f}s]: {step} - {progress}% - {message}")
+                
+                # Log warning if taking too long
+                if elapsed > 300:  # 5 minutes
+                    logger.warning(f"⏰ Phase 2 taking longer than expected ({elapsed:.0f}s) for {consultant['name']}")
+            
+            # Pre-flight check: Test AI connection
+            logger.info(f"🔍 Pre-flight: Testing AI connection...")
+            ai_test = await ai_client.test_connection()
+            if not ai_test["success"]:
+                raise Exception(f"AI service not ready: {ai_test.get('error', 'Unknown error')}")
+            
+            logger.info(f"✅ AI service ready: {ai_test.get('model', 'unknown')} ({ai_test.get('response_time', 0):.1f}s)")
+            
+            # Process Phase 2 with timeout protection
+            logger.info(f"🤖 Starting AI analysis with enhanced timeout handling...")
+            processing_start = time.time()
+            
+            # Wrap in asyncio timeout as additional protection
+            try:
+                result = await asyncio.wait_for(
+                    cv_processor.process_cv_phased(
+                        file_content=None,
+                        filename=consultant.get('name', 'unknown.pdf'),
+                        mime_type=None,
+                        consultant_id=consultant_id,
+                        phase='ai_analysis',
+                        extracted_text=consultant['extracted_text'],
+                        progress_callback=progress_callback
+                    ),
+                    timeout=settings.worker_ai_timeout  # 15 minutes worker timeout
+                )
+            except asyncio.TimeoutError:
+                raise Exception(f"Phase 2 processing exceeded worker timeout ({settings.worker_ai_timeout}s)")
+            
+            processing_time = time.time() - processing_start
+            
+            logger.info(f"✅ Phase 2 completed in {processing_time:.1f}s")
+            
+            # Update consultant with Phase 2 results
+            update_data = result['consultant_updates']
+            update_data['processing_metadata'].update({
+                "phase_2_success": True,
+                "phase_2_total_time": time.time() - start_time,
+                "phase_2_attempts_used": phase_2_attempts + 1
+            })
+            
+            await database.update_consultant(consultant_id, update_data)
+            
+            total_time = time.time() - start_time
+            self.phase_2_completed += 1
+            self.processed_today += 1
+            
+            # Log detailed success summary
+            full_analysis = result['full_analysis']
+            exp_total = full_analysis.get('experience_years', {}).get('total', 0)
+            skills_count = len(full_analysis.get('skills', {}).get('technical', [])) + \
+                          len(full_analysis.get('skills', {}).get('domain', []))
+            quals_count = len(full_analysis.get('qualifications', {}).get('degrees', [])) + \
+                          len(full_analysis.get('qualifications', {}).get('certifications', [])) + \
+                          len(full_analysis.get('qualifications', {}).get('licenses', []))
+            
+            logger.info(f"🎉 PHASE 2 SUCCESS: {full_analysis.get('name', consultant['name'])}")
+            logger.info(f"⏱️ Total time: {total_time:.1f}s | Processing: {processing_time:.1f}s")
+            logger.info(f"📊 Results: {exp_total}y exp | {skills_count} skills | {quals_count} quals")
+            logger.info(f"📈 Today's Phase 2: {self.phase_2_completed} | Total completed: {self.processed_today}")
+            logger.info(f"✅ FULLY PROCESSED - Available for matching!\n")
+            
+            # Reset retry count on success
+            retry_key = f"{consultant_id}_phase2"
+            if retry_key in self.retry_count:
+                del self.retry_count[retry_key]
+                
+        except Exception as e:
+            await self._handle_phase_2_error(consultant, e, start_time, phase_2_attempts)
+        
+        finally:
+            # Remove from active jobs
+            if consultant_id in self.active_jobs:
+                del self.active_jobs[consultant_id]
+
+    async def _handle_phase_2_error(self, consultant: Dict, error: Exception, start_time: float, current_attempts: int):
+        """Enhanced Phase 2 error handling with intelligent retry logic"""
+        
+        consultant_id = consultant['id']
+        total_time = time.time() - start_time
+        retry_key = f"{consultant_id}_phase2"
+        
+        logger.error(f"\n❌ PHASE 2 FAILED: {consultant['name']}")
+        logger.error(f"🔍 Error: {str(error)}")
+        logger.error(f"⏱️ Failed after: {total_time:.1f}s")
+        logger.error(f"🔄 Attempt: {current_attempts + 1}/{settings.worker_phase_2_max_attempts}")
+        
+        # Determine if this is a retryable error
+        error_str = str(error).lower()
+        is_retryable = any(keyword in error_str for keyword in [
+            'timeout', 'connection', 'service unavailable', 'overloaded',
+            'busy', 'temporary', 'network', 'service not ready'
+        ])
+        
+        # Determine retry strategy based on error type
+        if is_retryable and current_attempts < settings.worker_phase_2_max_attempts - 1:
+            # Calculate progressive retry delay based on error type
+            if 'timeout' in error_str:
+                base_delay = 300  # 5 minutes for timeout errors
+            elif 'connection' in error_str or 'service' in error_str:
+                base_delay = 120  # 2 minutes for connection errors
+            else:
+                base_delay = 60   # 1 minute for other retryable errors
+            
+            retry_delay = min(base_delay * (current_attempts + 1), 900)  # Max 15 minutes
+            
+            # Update retry count and set status for retry
+            self.retry_count[retry_key] = current_attempts + 1
+            
+            await database.update_consultant(consultant_id, {
+                "processing_status": "processing",
+                "processing_phase": "partially_processed",  # Reset to Phase 1 complete state
+                "extraction_errors": {
+                    "phase": "phase_2",
+                    "attempt": current_attempts + 1,
+                    "error": str(error),
+                    "error_type": "retryable" if is_retryable else "non_retryable",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "retry_delay": retry_delay,
+                    "next_retry_at": (datetime.now(timezone.utc).timestamp() + retry_delay),
+                    "total_time": total_time
+                }
+            })
+            
+            logger.info(f"🔄 Retryable error - Retry {current_attempts + 1}/{settings.worker_phase_2_max_attempts} scheduled")
+            logger.info(f"⏰ Next retry in {retry_delay/60:.1f} minutes")
+            
+            # Wait before allowing retry (non-blocking)
+            await asyncio.sleep(min(retry_delay, 60))  # Don't block worker too long
+            
+        else:
+            # Max retries reached or non-retryable error
+            error_category = "max_retries" if current_attempts >= settings.worker_phase_2_max_attempts - 1 else "non_retryable"
+            
+            await database.update_consultant(consultant_id, {
+                "processing_status": "failed",
+                "processing_phase": "failed",
+                "extraction_errors": {
+                    "final_error": str(error),
+                    "failed_phase": "phase_2",
+                    "failure_category": error_category,
+                    "retries_attempted": current_attempts + 1,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "total_time": total_time,
+                    "ai_model": settings.get_ai_config()["model"],
+                    "recommendation": self._get_error_recommendation(error_str)
+                }
+            })
+            
+            if error_category == "max_retries":
+                logger.error(f"💀 PHASE 2 PERMANENTLY FAILED: {consultant['name']} (max retries: {current_attempts + 1})")
+            else:
+                logger.error(f"💀 PHASE 2 PERMANENTLY FAILED: {consultant['name']} (non-retryable error)")
+            
+            logger.error(f"🔧 Recommendation: {self._get_error_recommendation(error_str)}\n")
+            
+            # Cleanup retry tracking
+            if retry_key in self.retry_count:
+                del self.retry_count[retry_key]
+
+    def _get_error_recommendation(self, error_str: str) -> str:
+        """Get recommendation based on error type"""
+        if 'timeout' in error_str:
+            return "Check Ollama performance, consider increasing timeout, or retry during off-peak hours"
+        elif 'connection' in error_str:
+            return "Check Ollama service status and network connectivity"
+        elif 'model' in error_str:
+            return f"Verify {settings.ai_model} is properly loaded in Ollama"
+        elif 'memory' in error_str or 'resource' in error_str:
+            return "Check system resources, consider reducing concurrent jobs"
+        else:
+            return "Check Ollama logs for detailed error information"
 # Global worker instance
 worker = PhasedCVProcessingWorker()
 
