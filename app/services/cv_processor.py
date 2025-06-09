@@ -5,7 +5,7 @@ import io
 import logging
 import re
 import time
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, List
 import PyPDF2
 import docx
 import mammoth
@@ -316,7 +316,7 @@ class CVProcessor:
         """Check if file type is supported"""
         return mime_type in self.supported_mime_types
     
-    def get_supported_extensions(self) -> List[str]:
+    def get_supported_extensions(self) -> list[str]:
         """Get list of supported file extensions"""
         return ['.pdf', '.doc', '.docx']
     
