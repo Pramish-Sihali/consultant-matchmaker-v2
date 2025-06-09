@@ -1,0 +1,96 @@
+Traceback (most recent call last):
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/networks.py", line 352, in import_email_validator
+    import email_validator
+ModuleNotFoundError: No module named 'email_validator'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/uvicorn/__main__.py", line 4, in <module>
+    uvicorn.main()
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/click/core.py", line 1442, in __call__
+    return self.main(*args, **kwargs)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/click/core.py", line 1363, in main
+    rv = self.invoke(ctx)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/click/core.py", line 1226, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/click/core.py", line 794, in invoke
+    return callback(*args, **kwargs)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/uvicorn/main.py", line 416, in main
+    run(
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/uvicorn/main.py", line 587, in run
+    server.run()
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/uvicorn/server.py", line 61, in run
+    return asyncio.run(self.serve(sockets=sockets))
+  File "/usr/lib/python3.10/asyncio/runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/uvicorn/server.py", line 68, in serve
+    config.load()
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/uvicorn/config.py", line 467, in load
+    self.loaded_app = import_from_string(self.app)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/uvicorn/importer.py", line 21, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/home/azureuser/consultant-matchmaker-v2/app/main.py", line 16, in <module>
+    from app.models.schemas import *
+  File "/home/azureuser/consultant-matchmaker-v2/app/models/schemas.py", line 77, in <module>
+    class ConsultantUpdateRequest(BaseModel):
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_model_construction.py", line 182, in __new__
+    complete_model_class(
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_model_construction.py", line 491, in complete_model_class
+    schema = cls.__get_pydantic_core_schema__(cls, handler)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/main.py", line 578, in __get_pydantic_core_schema__
+    return __handler(__source)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_schema_generation_shared.py", line 82, in __call__
+    schema = self._handler(__source_type)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 468, in generate_schema
+    schema = self._generate_schema(obj)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 700, in _generate_schema
+    schema = self._post_process_generated_schema(self._generate_schema_inner(obj))
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 722, in _generate_schema_inner
+    return self._model_schema(obj)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 541, in _model_schema
+    {k: self._generate_md_field_schema(k, v, decorators) for k, v in fields.items()},
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 541, in <dictcomp>
+    {k: self._generate_md_field_schema(k, v, decorators) for k, v in fields.items()},
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 886, in _generate_md_field_schema
+    common_field = self._common_field_schema(name, field_info, decorators)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 951, in _common_field_schema
+    schema = self._apply_annotations(
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 1654, in _apply_annotations
+    schema = get_inner_schema(source_type)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_schema_generation_shared.py", line 82, in __call__
+    schema = self._handler(__source_type)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 1635, in inner_handler
+    schema = self._generate_schema(obj)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 700, in _generate_schema
+    schema = self._post_process_generated_schema(self._generate_schema_inner(obj))
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 727, in _generate_schema_inner
+    return self.match_type(obj)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 810, in match_type
+    return self._match_generic_type(obj, origin)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 834, in _match_generic_type
+    return self._union_schema(obj)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 1036, in _union_schema
+    choices.append(self.generate_schema(arg))
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 463, in generate_schema
+    from_property = self._generate_schema_from_property(obj, obj)
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py", line 616, in _generate_schema_from_property
+    schema = get_schema(
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/networks.py", line 390, in __get_pydantic_core_schema__
+    import_email_validator()
+  File "/home/azureuser/consultant-matchmaker-v2/venv/lib/python3.10/site-packages/pydantic/networks.py", line 354, in import_email_validator
+    raise ImportError('email-validator is not installed, run `pip install pydantic[email]`') from e
+ImportError: email-validator is not installed, run `pip install pydantic[email]`

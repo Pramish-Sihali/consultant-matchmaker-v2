@@ -1,0 +1,43 @@
+# requirements.txt - Optimized Python Backend Dependencies
+
+# FastAPI and ASGI server - Latest versions
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database and Storage
+supabase==2.3.0
+python-multipart==0.0.6
+
+# Document Processing - Optimized
+PyPDF2==3.0.1
+python-docx==1.1.0
+mammoth==1.6.0
+
+# HTTP Requests - Async optimized
+httpx==0.24.0
+aiofiles==23.2.1
+
+# Data Validation and Configuration
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Background Tasks - Redis for better performance
+redis==5.0.1
+celery==5.3.4
+
+# Utilities and Performance
+python-dotenv==1.0.0
+python-json-logger==2.0.7
+typing-extensions==4.8.0
+
+# Caching and Performance
+cachetools==5.3.2
+
+# Development and Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+
+# Monitoring and Metrics (optional)
+prometheus-client==0.19.0
