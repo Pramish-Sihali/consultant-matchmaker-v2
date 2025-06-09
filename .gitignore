@@ -1,43 +1,9 @@
-# .gitignore - Python Backend for Consultant Matchmaker v2.0
-# ============================================================
-
-# ==========================================
-# PYTHON CACHE AND BYTECODE
-# ==========================================
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-
-# ==========================================
-# VIRTUAL ENVIRONMENTS
-# ==========================================
-venv/
-env/
-ENV/
-.venv/
-.env/
-.ENV/
-env.bak/
-venv.bak/
-pip-selfcheck.json
-
-# ==========================================
-# ENVIRONMENT VARIABLES & SECRETS
-# ==========================================
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-.env.staging
-*.env
-.envrc
-
-# ==========================================
-# DISTRIBUTION / PACKAGING
-# ==========================================
 build/
 develop-eggs/
 dist/
@@ -53,259 +19,49 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# ==========================================
-# INSTALLER LOGS
-# ==========================================
-pip-log.txt
-pip-delete-this-directory.txt
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+.env/
+.ENV/
+env.bak/
+venv.bak/
 
-# ==========================================
-# UNIT TEST / COVERAGE REPORTS
-# ==========================================
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-cover/
+# Environment Variables
+.env
+.env.*
+*.env
 
-# ==========================================
-# JUPYTER NOTEBOOK
-# ==========================================
-.ipynb_checkpoints
-
-# ==========================================
-# PYENV
-# ==========================================
-.python-version
-
-# ==========================================
-# CELERY
-# ==========================================
-celerybeat-schedule
-celerybeat.pid
-
-# ==========================================
-# SAGE
-# ==========================================
-.sage.py
-
-# ==========================================
-# SPYDER
-# ==========================================
-.spyderproject
-.spyproject
-
-# ==========================================
-# ROPE
-# ==========================================
-.ropeproject
-
-# ==========================================
-# MKDOCS
-# ==========================================
-/site
-
-# ==========================================
-# MYPY
-# ==========================================
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# ==========================================
-# PYRE TYPE CHECKER
-# ==========================================
-.pyre/
-
-# ==========================================
-# PYTYPE STATIC TYPE ANALYZER
-# ==========================================
-.pytype/
-
-# ==========================================
-# IDE SPECIFIC FILES
-# ==========================================
-# VSCode
+# IDE
 .vscode/
-*.code-workspace
-
-# PyCharm
 .idea/
-*.iml
-*.ipr
-*.iws
-
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
-
-# Vim
 *.swp
 *.swo
-*~
 
-# Emacs
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
+# Database
+*.db
+*.sqlite3
 
-# ==========================================
-# OPERATING SYSTEM FILES
-# ==========================================
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Windows
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
-[Dd]esktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
-
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
-
-# ==========================================
-# APPLICATION SPECIFIC
-# ==========================================
 # Logs
 logs/
 *.log
-log/
-*.log.*
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-instance/
+# OS
+.DS_Store
+Thumbs.db
 
-# Temporary files
+# Uploads
+uploads/
 temp/
 tmp/
-*.tmp
-*.temp
-.temp/
-.tmp/
 
-# Uploads and media
-uploads/
-media/
-static/uploads/
-files/
-
-# Process IDs
-*.pid
-.api.pid
-.worker.pid
-
-# ==========================================
-# DOCKER
-# ==========================================
-Dockerfile.local
-docker-compose.override.yml
-.dockerignore
-
-# ==========================================
-# BACKUP FILES
-# ==========================================
-*.bak
-*.backup
-*.old
-*.orig
-*.save
-
-# ==========================================
-# SECURITY & CERTIFICATES
-# ==========================================
-*.pem
-*.key
-*.crt
-*.cer
-*.p12
-*.pfx
-ssl/
-
-# ==========================================
-# MONITORING & ANALYTICS
-# ==========================================
-.prometheus/
-.grafana/
-
-# ==========================================
-# CUSTOM APPLICATION FILES
-# ==========================================
-# Ollama models (if stored locally)
+# Ollama models
 ollama_models/
 models/
-
-# Redis dumps
-dump.rdb
 
 # Test files
 test_uploads/
 test_cvs/
-*.test.*
-
-# Configuration backups
-config.backup
-settings.backup
-
-# Development scripts
-dev_*
-debug_*
-test_*.py
-
-# ==========================================
-# VERSION CONTROL
-# ==========================================
-.git/
-.svn/
-.hg/
-.bzr/
-
-# ==========================================
-# NOTES & DOCUMENTATION DRAFTS
-# ==========================================
-TODO.md
-NOTES.md
-DRAFT.md
-notes/
-drafts/
